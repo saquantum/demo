@@ -838,9 +838,7 @@ public class test {
 
 
 
-等待唤醒机制:
-
-
+等待唤醒机制: 如果把制造数据和收集数据写在单个线程中, 可能会导致程序瓶颈. 当一个线程负责制造数据, 另一个线程负责收集数据时, 可能会出现过剩或者丢失的数据. 使用等待唤醒机制可以解决.
 
 继承于`Object`的方法:
 
@@ -849,6 +847,98 @@ public class test {
 | `void wait()`      | 让当前线程等待, 直到被其他线程唤醒 |
 | `void notify()`    | 随机唤醒一个线程                   |
 | `void notifyAll()` | 唤醒所有线程                       |
+
+用锁对象的`Condition`对象的`await()`和`signal()`方法:
+
+```
+public class test {
+    public static void main(String[] args) {
+        FutureTask<Object> ft = new FutureTask<>(new Consumer());
+        new Thread(ft).start();
+        new Thread(new FutureTask<String>(new Producer())).start();
+    }
+}
+class LoggingTable {
+    private static final LinkedList<String> loggingTable = new LinkedList<>();
+    public static int count = 0;
+    public static Lock lock = new ReentrantLock();
+    public static final Condition notEmpty = lock.newCondition();
+    public static final Condition notFull = lock.newCondition();
+    public static void enqueue(String s) { loggingTable.add(s); }
+    public static String dequeue() { return loggingTable.remove(0); }
+    public static boolean isEmpty() { return loggingTable.isEmpty(); }
+}
+class Consumer implements Callable<Object> {
+    static Lock lock = new ReentrantLock();
+    @Override
+    public Object call() throws Exception {
+        while (true) {
+            LoggingTable.lock.lock();
+            try {
+                if (LoggingTable.count >= 100) {
+                    break;
+                } else {
+                    while (LoggingTable.isEmpty()) {
+                        LoggingTable.notEmpty.await();
+                    }
+                    String s = LoggingTable.dequeue();
+                    System.out.println(s + " is dequeued.");
+                    LoggingTable.notFull.signalAll();
+                }
+            } finally {
+                LoggingTable.lock.unlock();
+            }
+        }
+        return null;
+    }
+}
+class Producer implements Callable<String> {
+    static Lock lock = new ReentrantLock();
+    @Override
+    public String call() throws Exception {
+        while (true) {
+            LoggingTable.lock.lock();
+            try {
+                if (LoggingTable.count >= 100) {
+                    System.out.println("The logging system has received 100 users.");
+                    break;
+                } else {
+                    // check whether logging queue is empty
+                    while (!LoggingTable.isEmpty()) {
+                        // not empty, wait
+                        LoggingTable.notFull.await();
+                    }
+                    // empty queue, enqueue next String
+                    String s = randomStringGenerator();
+                    LoggingTable.enqueue(s);
+                    System.out.println("User " + s + " is enqueued.");
+                    LoggingTable.count++;
+                    LoggingTable.notEmpty.signalAll();
+                }
+            } finally {
+                LoggingTable.lock.unlock();
+            }
+        }
+        return null;
+    }
+private String randomStringGenerator() {
+        Random r = new Random();
+        int len = r.nextInt(20) + 1;
+        char[] chs = new char[len];
+        int k = 0;
+        while (k < len) {
+            int tmp = r.nextInt(128);
+            if (('a' <= tmp && tmp <= 'z') || ('A' <= tmp && tmp <= 'Z') || ('0' <= tmp && tmp <= '9')) {
+                chs[k] = (char) tmp;
+                k++;
+            }
+        }
+        return new String(chs);
+    }
+}
+```
+
+用`wait()`和`notify()`: 将`Table.Condition.await()`换成`Table.lock.wait()`使线程与锁绑定, 并把用锁控制的代码`lock.lock()`改成同步代码块`synchronized(Table.lock){...}`.
 
 
 
@@ -862,4 +952,68 @@ public class test {
 | 等待 `waiting`           | `wait()`           |
 | 计时等待 `timed waiting` | `sleep()`          |
 | 结束 `terminated`        | 运行完毕           |
+
+
+
+线程池: 线程在结束之后不是关闭, 而是存入线程池等待复用, 节省资源.
+
+|                                                              |                                   |
+| ------------------------------------------------------------ | --------------------------------- |
+| `Executors.` `static ExecutorService newCachedThreadPool()`  | 创建上限为`int`类型最大值的线程池 |
+| `Executors.` `static ExecutorService newFixedThreadPool(int n)` | 创建上限为`n`的线程池             |
+| `ExecutorService.` `Future<?> submit(Runnable task)`         | 提交任务                          |
+| `ExecutorService.` `Future<E> submit(FutureTask<E> task)`    | 提交任务                          |
+| `ExecutorService.` `void shutdown()`                         | 销毁线程池                        |
+
+线程池的全参数构造方法:
+
+```
+ThreadPoolExecutuor(int corePoolSize, int maxPoolSize, long keepAliveTime, TimeUnit unit, BlockingQueue<Runnable> workQueue, ThreadFactory threadFactory, RejectedExecutionHandler handler)
+int corePoolSize: 核心线性数量
+int maxPoolSize: 最大线程数 >=核心线程数
+long keepAliveTime: 空闲线程最大存活时间
+TimeUnit unit: 时间单位
+BlockingQueue<Runnable> workQueue: 阻塞队列, 用于存放排队的线程
+ThreadFactory threadFactory: 创建线程工厂
+RejectedExecutionHandler handler: 拒绝策略
+ 
+ThreadPoolExecutuor pool = new ThreadPoolExecutuor(3, 6, 60, TimeUnit.SECONDS, new ArrayBlockingQueue<>(3), Executors.defaultThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
+```
+
+最大并行数: 能同时运行的最大线程数 `Runtime.getRuntime().availableProcessors()`
+
+CPU密集型运算(计算多, 读取少): 线程池的最大线程数设为 最大并行数+1
+
+IO密集型运算: 线程池的最大线程数设为 最大并行数\*期望CPU利用率\*(CPU计算时间+CPU等待时间)\*CPU计算时间
+
+
+
+## 网络编程
+
+网络三要素
+
+|        |                            |
+| ------ | -------------------------- |
+| IP     | 设备在网络中的唯一标识     |
+| 端口号 | 应用程序在设备中唯一的标识 |
+| 协议   | http https ftp TCP UDP 等  |
+
+
+
+UPD协议: 面向无连接通信协议, 一次最多发送64k数据.
+
+```
+发送信息: 创建DatagramSocket对象, 使用send方法发送DatagramPacket对象.
+DatagramSocket ds = new DatagramSocket(); // 空参构造会随机分配可用的端口
+byte[] bytes = "This is a message";
+ds.send(new DatagramPacket(bytes, bytes.length, InetAddress.getByName("127.0.0.1"), 8000));
+ds.close();
+
+接受信息: 创建DatagramSocket对象时指定端口, 使用receive方法接收DatagramPacket对象.
+DatagramSocket ds = new DatagramSocket(8000);
+byte[] bytes = new byte[1024];
+DatagramPacket dp = new DatagramPacket(bytes, bytes.length);
+ds.receive(dp);
+System.out.println("received message \"" + new String(dp.getData(), 0, dp.getLength()) + "\" from IP address " + dp.getAddress + " 's port " + dp.getPort);
+```
 
