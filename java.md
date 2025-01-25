@@ -561,7 +561,7 @@ fr.close();
 
 字节缓冲流: `BufferedInputStream(InputStream is)`, `BufferedOutputStream(OutputStream os)`: 输入输出时都先填满默认长度8192的缓冲区再从缓冲区调取数据.用法与基本流一样. 要修改缓冲区长度, 使用构造函数的第二个参数.
 
-字符缓冲流: `BufferedReader(Reader r)`, `BufferedWriter(Writer r)` . 用法与基本流一致, 但二者的默认缓冲区长度是8192个字符(8192*2个字节). 要修改缓冲区长度, 使用构造函数的第二个参数. 两个独有方法: 字符缓冲输入流的`String readLine()`一次读取一整行数据(但不会读取换行符). 读取到文件末尾的返回值不是`-1`而是`null`. 字符缓冲输入流的`void newLine()`输出换行符.
+字符缓冲流: `BufferedReader(Reader r)`, `BufferedWriter(Writer r)` . 用法与基本流一致, 但二者的默认缓冲区长度是8192个字符(8192*2个字节). 要修改缓冲区长度, 使用构造函数的第二个参数. 两个独有方法: 字符缓冲输入流的`String readLine()`一次读取一整行数据(但不会读取换行符). 读取到文件末尾的返回值不是`-1`而是`null`. 可以调用字符缓冲输入流自带的`void newLine()`来得到换行符, 或者使用`System.lineSeparator()`方法.
 
 
 
@@ -834,6 +834,10 @@ public class test {
 2. 将unlock方法置于finally中, 可以保证锁被打开.
 ```
 
+要将变量传递给线程, 可以使用非空构造方法来接收变量.
+
+
+
 死锁: 两个锁相互嵌套, 导致程序卡死.
 
 
@@ -977,7 +981,10 @@ BlockingQueue<Runnable> workQueue: 阻塞队列, 用于存放排队的线程
 ThreadFactory threadFactory: 创建线程工厂
 RejectedExecutionHandler handler: 拒绝策略
  
-ThreadPoolExecutuor pool = new ThreadPoolExecutuor(3, 6, 60, TimeUnit.SECONDS, new ArrayBlockingQueue<>(3), Executors.defaultThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
+ThreadPoolExecutuor pool = new ThreadPoolExecutuor(3, 6, 60, TimeUnit.SECONDS, 
+new ArrayBlockingQueue<>(3), 
+Executors.defaultThreadFactory(), 
+new ThreadPoolExecutor.AbortPolicy());
 ```
 
 最大并行数: 能同时运行的最大线程数 `Runtime.getRuntime().availableProcessors()`
@@ -998,14 +1005,16 @@ IO密集型运算: 线程池的最大线程数设为 最大并行数\*期望CPU�
 | 端口号 | 应用程序在设备中唯一的标识 |
 | 协议   | http https ftp TCP UDP 等  |
 
+本机的IP地址: 127.0.0.1
 
+获取本机局域网IP: `InetAddress.getByName("DESKTOP-PF2B1AC").getHostAddress()`
 
 UPD协议: 面向无连接通信协议, 一次最多发送64k数据.
 
 ```
 发送信息: 创建DatagramSocket对象, 使用send方法发送DatagramPacket对象.
 DatagramSocket ds = new DatagramSocket(); // 空参构造会随机分配可用的端口
-byte[] bytes = "This is a message";
+byte[] bytes = "This is a message".getBytes();
 ds.send(new DatagramPacket(bytes, bytes.length, InetAddress.getByName("127.0.0.1"), 8000));
 ds.close();
 
@@ -1014,6 +1023,342 @@ DatagramSocket ds = new DatagramSocket(8000);
 byte[] bytes = new byte[1024];
 DatagramPacket dp = new DatagramPacket(bytes, bytes.length);
 ds.receive(dp);
-System.out.println("received message \"" + new String(dp.getData(), 0, dp.getLength()) + "\" from IP address " + dp.getAddress + " 's port " + dp.getPort);
+System.out.println("received message \"" + new String(dp.getData(), 0, dp.getLength()) + "\" from IP address " + dp.getAddress() + " 's port " + dp.getPort());
 ```
 
+单播: 发送到一台设备上
+
+组播: 发送到局域网中的一组设备上 预留地址: 224.0.0.0 ~ 224.0.0.255
+
+广播: 发送给局域网中的所有设备 地址: 255.255.255.255 广播的发送代码与单播一致, 只需要修改IP. 接收广播不需要修改IP.
+
+组播的发送和接受:
+
+```
+MulticastSocket ms = new MulticastSocket(); 
+byte[] bytes = "This is a message".getBytes();
+ms.send(new DatagramPacket(bytes, bytes.length, InetAddress.getByName("224.0.0.1"), 8000));
+ms.close();
+
+MulticastSocket ms = new MulticastSocket(8000);
+ms.joinGroup(InetAddress.getByName("224.0.0.1"));
+byte[] bytes = new byte[1024];
+DatagramPacket dp = new DatagramPacket(bytes, bytes.length);
+ms.receive(dp);
+System.out.println("received message \"" + new String(dp.getData(), 0, dp.getLength()) + "\" from IP address " + dp.getAddress() + " 's port " + dp.getPort());
+```
+
+TCP协议: 通信之前确保连接建立, 传输数据时使用IO流
+
+三次握手: 客户端向服务器发出连接请求等待服务器确认, 服务器返回一个响应, 客户端再次发出确认信息建立连接.
+
+四次挥手: 客户端发出取消连接请求, 服务器返回一个响应, 服务器处理完数据传输后再次发出确认取消连接消息, 客户端再次发送消息取消连接.
+
+基本TCP通信代码: 使用`Socket`和`ServerSocket`对象
+
+```
+客户端:
+Socket socket = new Socket("127.0.0.1", 8001);
+BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(s.getOutputStream()));
+bw.write("886");
+bw.flush(); // 需要手动刷新Buffered流的缓存, 否则信息将丢失
+socket.close();
+
+服务器:
+ServerSocket ss = new ServerSocket(8001);
+Socket socket = ss.accept();
+BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+String line;
+while((line = br.readLine()) != null){
+	System.out.println(line);
+}
+socket.close();
+ss.close();
+```
+
+多线程的TCP通信, 服务器可回传数据:
+
+```
+客户端:
+public class Client {
+    public static void main(String[] args) throws IOException {
+        Socket s = new Socket("127.0.0.1", 8001);
+        BufferedReader file = new BufferedReader(new FileReader("E:\\Users\\Desktop\\index.html"));
+        BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(s.getOutputStream()));
+        String filecontents;
+        while((filecontents = file.readLine()) != null){
+            bw.write(filecontents + System.lineSeparator());
+            bw.newLine();
+        }
+        bw.flush();
+        file.close();
+        s.shutdownOutput();
+        BufferedReader br = new BufferedReader(new InputStreamReader(s.getInputStream()));
+        String line;
+        while((line = br.readLine()) != null){
+            System.out.println(line);
+        }
+        s.close();
+    }
+}
+
+服务器:
+public class Server {
+    public static void main(String[] args) throws IOException {
+        ServerSocket ss = new ServerSocket(8111);
+        ExecutorService threadPool = Executors.newCachedThreadPool();
+        while (true) {
+            Socket s = ss.accept();
+            threadPool.submit(new receiverRunnable(s));
+        }
+        //ss.close();
+    }
+}
+class receiverRunnable implements Runnable {
+    Socket s;
+    receiverRunnable(Socket s) {
+        this.s = s;
+    }
+    @Override
+    public void run() {
+        try {
+            BufferedReader br = new BufferedReader(new InputStreamReader(s.getInputStream()));
+            BufferedWriter file = new BufferedWriter(new FileWriter(UUID.randomUUID().toString().replace("-", "") + ".html"));
+            String line;
+            while ((line = br.readLine()) != null) {
+                System.out.println(line);
+                file.write(line);
+                file.newLine();
+            }
+            file.close();
+            BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(s.getOutputStream()));
+            bw.write("server has received this massage.");
+            bw.newLine();
+            bw.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (s != null) {
+                try {
+                    s.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+}
+```
+
+局域网网页服务器:
+
+```
+public class Server {
+    public static void main(String[] args) throws IOException {
+        System.out.println(InetAddress.getByName("DESKTOP-PF2B1AC").getHostAddress());
+        ServerSocket ss = new ServerSocket(8111);
+        ExecutorService threadPool = Executors.newCachedThreadPool();
+        while (true) {
+            Socket s = ss.accept();
+            threadPool.submit(new receiverRunnable(s));
+        }
+        //ss.close();
+    }
+}
+class receiverRunnable implements Runnable {
+    Socket s;
+    receiverRunnable(Socket s) {
+        this.s = s;
+    }
+    @Override
+    public void run() {
+        try {
+            // read and log HTTP request
+            BufferedReader br = new BufferedReader(new InputStreamReader(s.getInputStream()));
+            BufferedWriter file = new BufferedWriter(new FileWriter("requestLog_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) + "_" + s.getInetAddress().getHostAddress().replace(":", "_") + ".txt"));
+            String line;
+            while ((line = br.readLine()) != null && !line.isEmpty()) {
+                System.out.println(line);
+                file.write(line);
+                file.newLine();
+            }
+            file.flush();
+            file.close();
+            if(!new File("E:\\Users\\Desktop\\index.html").exists()){
+                System.out.println("index does not exists");
+            }
+            // response with a html file
+            BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(s.getOutputStream()));
+            String htmlContent = new String(Files.readAllBytes(Paths.get("E:\\Users\\Desktop\\index.html")));
+            bw.write("HTTP/1.1 200 OK");
+            bw.newLine();
+            bw.write("Content-Type: text/html");
+            bw.newLine();
+            bw.write("Content-Length: " + htmlContent.length());
+            bw.newLine();
+            bw.newLine();
+            bw.write(htmlContent); // Write HTML content
+            bw.flush();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (s != null) {
+                try {
+                    s.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+}
+```
+
+## 反射
+
+获取类的变量和方法, 以实现动态创建或者调用.
+
+获取`Class`对象的三种方法:
+
+1. 使用静态方法`Class.forName()`: `Class clazz = Class.forName("PACKAGE.CLASS");`
+2. 调取类的字节码文件: `Class clazz = CLASS.class;`
+3. 调取类的实例的`getClass()`方法: `Class clazz = new CLASS().getClass();`
+
+获取构造方法:
+
+|                                                              |                          |
+| ------------------------------------------------------------ | ------------------------ |
+| `Class: Constructor<?>[] getConstructors()`                  | 返回所有公共构造方法     |
+| `Class: Constructor<?>[] getDeclaredConstructors()`          | 返回所有声明的构造方法   |
+| `Class: Constructor<T> getConstructor(Class<?>... parameterTypes)` | 返回特定的公共构造方法   |
+| `Class: Constructor<T> getDeclaredConstructor(Class<?>... parameterTypes)` | 返回特定的声明的构造方法 |
+
+创建对象: `Constructor: newInstance(Object... initargs)`
+
+获取构造方法的参数: `Constructor: Parameter[] getParameters()`
+
+
+
+获取变量:
+
+|                                              |                      |
+| -------------------------------------------- | -------------------- |
+| `Class: Field[] getFields()`                 | 返回所有公共变量     |
+| `Class: Field[] getDeclaredFields()`         | 返回所有声明的变量   |
+| `Class: Field getField(String name)`         | 返回特定的公共变量   |
+| `Class: Field getDeclaredField(String name)` | 返回特定的声明的变量 |
+
+给变量赋值: `Field: void set(Object obj, Object value)`
+
+获取变量的值: `Field: Object get(Object obj)`
+
+获取变量的数据类型: `Field: Class<?> getType()`
+
+
+
+获取方法:
+
+|                                                              |                      |
+| ------------------------------------------------------------ | -------------------- |
+| `Class: Method[] getMethods()`                               | 返回所有公共方法     |
+| `Class: Method[] getDeclaredMethods()`                       | 返回所有声明的方法   |
+| `Class: Method getMethod(String name, Class<?>... parameterTypes)` | 返回特定的公共方法   |
+| `Class: Method getDeclaredMethod(String name, Class<?>... parameterTypes)` | 返回特定的声明的方法 |
+
+调用方法: `Method: Object invoke(Object obj, Object... args)`
+
+
+
+获取权限修饰符: `Constructor/Method/Field: getModifier()`
+
+临时取消访问限制: `Constructor/Method/Field: setAccessible(true)`
+
+## 动态代理
+
+可以无侵入式地给代码增加新功能. 通过创建包含要被代理的方法的接口, 使代理实现接口并调用原来的方法来实现代理.
+
+`java.lang.reflect.Proxy: static Object newProxyInstance(ClassLoader loader, Class<?>[] interfaces, InvocationHandler h) ` 产生代理对象
+
+`ClassLoader loader`: 指定类加载器
+
+`Class<?>[] interfaces`: 指定包含需要被代理的方法的接口
+
+```
+new InvocationHandler() {
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        return null;
+    }
+}
+```
+
+指定代理对这些方法的操作, `Object proxy`为代理实例, `Method method`为被代理的方法, `Object[] args`为被代理的方法的参数
+
+```
+public class test {
+    public static void main(String[] args) {
+        ProxyInterface proxy = ProxyAnimal.createProxy(new Animal("dog", 10));
+        System.out.println(proxy.eat());
+        System.out.println(proxy.sleeping(6));
+    }
+}
+
+class ProxyAnimal {
+    private ProxyAnimal() {}
+	// a static method to create the proxy
+    public static ProxyInterface createProxy(Animal animal) {
+        ProxyInterface p = (ProxyInterface) Proxy.newProxyInstance(ProxyAnimal.class.getClassLoader(), new Class[]{ProxyInterface.class}, new InvocationHandler() {
+            @Override
+            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            // use reflection to handle methods by name and argument
+                if(method.equals(ProxyInterface.class.getMethod("eat"))) {
+                    System.out.println("the animal wants to eat");
+                } else if (method.equals(ProxyInterface.class.getMethod("sleeping", int.class))) {
+                    System.out.println("the animal wants to sleep");
+                }
+                return method.invoke(animal, args);
+            }
+        });
+        return p;
+    }
+}
+
+class Animal implements ProxyInterface {
+    String name;
+    int age;
+
+    public Animal(String name, int age) {
+        this.name = name;
+        this.age = age;
+    }
+
+    public String eat() {
+        if (name == null) {
+            System.out.println("the animal is eating");
+        } else {
+            System.out.println(age + " years old " + name + " is eating");
+        }
+        return "yumyum";
+    }
+
+    public boolean sleeping(int t) {
+        if (t <= 0 || t >= 9) {
+            System.out.println("unhealthy sleep time for the animal");
+            return false;
+        }
+        if (name == null) {
+            System.out.println("the animal is eating");
+        } else {
+            System.out.println(age + " years old " + name + " is eating");
+        }
+        return true;
+    }
+}
+
+interface ProxyInterface {
+    String eat();
+
+    boolean sleeping(int t);
+}
+```
