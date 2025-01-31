@@ -1,3 +1,265 @@
+## java.awt+java.swing交互界面
+
+```
+package newPackage;
+
+import javax.swing.*;
+import javax.swing.border.BevelBorder;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.util.Arrays;
+import java.util.Random;
+
+public class GameJFrame extends JFrame implements MouseListener {
+    private final int PICTURES = 16;
+    private String currentPuzzle = "testModule\\src\\image\\animal\\animal3\\";
+    private int[][] array = new int[4][4];
+    private JLabel[][] images = new JLabel[4][4];
+
+    public GameJFrame(){
+        // 初始化窗口
+        this.initFrame();
+        // 初始化菜单栏
+        this.initMenu();
+        // 打乱图片顺序
+        this.randomizeImages();
+        // 初始化图片
+        this.initImages();
+        // 初始化键盘快捷键
+        this.initShortcuts();
+        // 最后设置为可见窗口
+        this.setVisible(true);
+    }
+
+    private boolean wins(){
+        for(int i = 0; i < 4; i++){
+            for(int j = 0; j < 4; j++){
+                if(this.array[i][j] != j*4+i+1){
+                    if(i==3 && j==3 && this.array[i][j]==0){
+                    }else{
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    private void initShortcuts(){
+        this.setFocusable(true);  // Make sure JFrame is focusable
+        this.requestFocusInWindow();  // Request focus
+
+        this.addKeyListener(new KeyListener() {
+            @Override
+            public void keyTyped(KeyEvent e) {}
+            @Override
+            public void keyPressed(KeyEvent e) {}
+            @Override
+            public void keyReleased(KeyEvent e) {
+                int keyCode = e.getKeyCode();
+                if(keyCode == 27){
+                    // 按ESC会关闭窗口
+                    GameJFrame.this.dispose();
+                }else if(keyCode == 'A'){
+                    // 按a会启用作弊功能
+                    System.out.println("autowin");
+                    autowin();
+                }
+
+            }
+        });
+    }
+
+    private void initImages(){
+        for(int i = 0; i < 4; i++){
+            for(int j = 0; j < 4; j++){
+                int n = this.array[i][j];
+                JLabel label;
+                if(n == 0){
+                    label = new JLabel();
+                }else{
+                    label = new JLabel(new ImageIcon( this.currentPuzzle + n + ".jpg"));
+
+                }
+                label.setBorder(new BevelBorder(1));
+                label.addMouseListener(this);
+                label.setBounds(i*105,j*105,105,105);
+                this.images[i][j] = label;
+                this.getContentPane().add(label);
+            }
+        }
+        if(this.wins()){
+            System.out.println("you win");
+        }
+    }
+
+
+    private void initFrame(){
+        // 设置尺寸
+        this.setSize(603, 700);
+        // 设置居中
+        this.setLocationRelativeTo(null);
+        // 关闭窗口后后台停止运行
+        this.setDefaultCloseOperation(EXIT_ON_CLOSE);
+        // 取消默认布局
+        this.setLayout(null);
+    }
+
+    private void initMenu(){
+        // 新建菜单栏对象
+        JMenuBar menuBar = new JMenuBar();
+        // 新建下拉菜单
+        JMenu functionality = new JMenu("options");
+        JMenu info = new JMenu("info");
+        // 新建下拉菜单选项
+        JMenuItem restartItem = new JMenuItem("restart game");
+        JMenuItem currentAutoWinItem = new JMenuItem("current player wins");
+        JMenuItem information = new JMenuItem("information");
+        // 绑定选项至下拉菜单
+        functionality.add(restartItem);
+        functionality.add(currentAutoWinItem);
+        info.add(information);
+        // 绑定下拉菜单至菜单栏
+        menuBar.add(functionality);
+        menuBar.add(info);
+        // 将当前菜单绑定至窗口
+        this.setJMenuBar(menuBar);
+    }
+
+    private void randomizeImages(){
+        int[] tmp = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
+        Random r = new Random();
+        for (int i = 0; i < tmp.length; i++) {
+            int j = r.nextInt(tmp.length);
+            int t = tmp[j];
+            tmp[j] = tmp[i];
+            tmp[i] = t;
+        }
+        System.out.println(Arrays.toString(tmp));
+        for(int n = 0; n < tmp.length; n++) {
+            this.array[n/4][n%4] = tmp[n];
+        }
+        for(int i = 0; i < 4; i++){
+            for(int j = 0; j < 4; j++){
+                System.out.print(array[i][j] + " ");
+            }
+            System.out.println();
+        }
+    }
+
+    private void removeAllImages(){
+        for(int i = 0; i < 4; i++){
+            for(int j = 0; j < 4; j++){
+                JLabel label = this.images[i][j];
+                for (MouseListener mouseListener : label.getMouseListeners()) {
+                    label.removeMouseListener(mouseListener);
+                }
+                this.remove(label);
+            }
+        }
+    }
+
+    private void autowin(){
+        removeAllImages();
+        for(int i = 0; i < 4; i++){
+            for(int j = 0; j < 4; j++){
+                this.array[i][j] = j*4+i+1;
+            }
+        }
+        this.array[3][3] = 0;
+        this.revalidate();  // Refresh the layout
+        this.repaint();  // Repaint the frame
+        initImages();
+    }
+
+    private void swapImages(JLabel label){
+        // find the label in the array
+        int x=-1, y=-1;
+        for(int i = 0; i < 4; i++){
+            for(int j = 0; j < 4; j++){
+                if(this.images[i][j].equals(label)){
+                    x = i;
+                    y = j;
+                    break;
+                }
+            }
+        }
+        if(x==-1 || y==-1){
+            return;
+        }
+        JLabel emptyTile = null;
+        int newX = -1, newY = -1;
+        if(y>0 && this.array[x][y-1]==0){
+            System.out.println("move up");
+            emptyTile = this.images[x][y-1];
+            newX = x;
+            newY = y-1;
+        }else if(y<3 && this.array[x][y+1]==0){
+            System.out.println("move down");
+            emptyTile = this.images[x][y+1];
+            newX = x;
+            newY = y+1;
+        }else if(x>0 && this.array[x-1][y]==0){
+            System.out.println("move left");
+            emptyTile = this.images[x-1][y];
+            newX = x-1;
+            newY = y;
+        }else if(x<3 && this.array[x+1][y]==0){
+            System.out.println("move right");
+            emptyTile = this.images[x+1][y];
+            newX = x+1;
+            newY = y;
+        }
+        if (newX == -1 || newY == -1) {
+            return;
+        }
+        // Swap labels in the UI
+        JLabel temp = this.images[x][y];
+        this.images[x][y] = this.images[newX][newY];
+        this.images[newX][newY] = temp;
+
+        // Swap values in the array
+        int tempVal = this.array[x][y];
+        this.array[x][y] = this.array[newX][newY];
+        this.array[newX][newY] = tempVal;
+
+        // Update the label positions
+        this.images[x][y].setBounds(x * 105, y * 105, 105, 105);
+        this.images[newX][newY].setBounds(newX * 105, newY * 105, 105, 105);
+
+        this.revalidate();
+        this.repaint();
+    }
+
+    @Override
+    public void mouseClicked(MouseEvent e) {}
+    @Override
+    public void mousePressed(MouseEvent e) {}
+    @Override
+    public void mouseReleased(MouseEvent e) {
+        this.swapImages((JLabel) e.getSource());
+        if(this.wins()){
+            System.out.println("you win");
+        }
+    }
+    @Override
+    public void mouseEntered(MouseEvent e) {
+        JLabel source = (JLabel) e.getSource();
+        source.setBorder(new BevelBorder(0));
+    }
+    @Override
+    public void mouseExited(MouseEvent e) {
+        JLabel source = (JLabel) e.getSource();
+        source.setBorder(new BevelBorder(1));
+    }
+}
+
+```
+
+
+
 ## 继承
 
 可继承的内容
